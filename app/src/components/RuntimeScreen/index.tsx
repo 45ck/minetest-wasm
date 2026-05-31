@@ -13,6 +13,38 @@ interface RuntimeScreenProps {
   serverExitTimestamp: Date | null;
 }
 
+function resolveVibeCoordBrowserBasePath(): string {
+  const match = window.location.pathname.match(/^(.*\/luanti\/browser)(?:\/client(?:\/.*)?|\/?)$/);
+  if (!match?.[1]) throw new Error('VibeCoord browser base path could not be resolved');
+  return match[1];
+}
+
+async function mintVibeCoordBridgeToken(host: string, port: number): Promise<string> {
+  const connectUrl = new URL(`${resolveVibeCoordBrowserBasePath()}/connect`, window.location.origin);
+  const response = await fetch(connectUrl.toString(), {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ host, port }),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `VibeCoord bridge token request failed: ${response.status}`);
+  }
+  const payload = await response.json();
+  if (!payload || typeof payload.token !== 'string' || !payload.token) {
+    throw new Error('VibeCoord bridge token response was missing token');
+  }
+  return payload.token;
+}
+
+function withVibeCoordBridgeToken(proxyUrl: string, token: string): string {
+  const url = new URL(proxyUrl, window.location.origin);
+  url.protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  url.searchParams.set('token', token);
+  return url.toString();
+}
+
 declare global {
   interface Window {
     emloop_ready?: () => void;
@@ -220,7 +252,16 @@ const RuntimeScreen: React.FC<RuntimeScreenProps> = ({ gameOptions, onGameStatus
       }
 
       // Set up network - do this before initializing emsocket
-      setProxy(gameOptions.proxy);
+      if (gameOptions.mode === 'direct') {
+        if (!gameOptions.directAddress || !gameOptions.directPort) {
+          throw new Error('RuntimeScreen: direct preview address is required');
+        }
+        const token = await mintVibeCoordBridgeToken(gameOptions.directAddress, gameOptions.directPort);
+        setProxy(withVibeCoordBridgeToken(gameOptions.proxy, token));
+      }
+      else {
+        setProxy(gameOptions.proxy);
+      }
       
       // Handle game mode specific settings and VPN setup
       // Do this before emsocket_init

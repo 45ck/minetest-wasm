@@ -1,14 +1,35 @@
 name: build
 
-on: push
+on:
+  push:
+  workflow_dispatch:
 
 jobs:
-  docker:
-    name: "Build Docker Image"
+  wasm-www:
+    name: Build browser client
     runs-on: ubuntu-latest
+    timeout-minutes: 180
     steps:
-      - uses: actions/checkout@v3
-      - name: Build docker image
+      - uses: actions/checkout@v4
+
+      - name: Show builder disk
+        run: df -h
+
+      - name: Build Luanti WASM www bundle
+        run: ./build_all_with_docker.sh --with-build
+
+      - name: Verify www bundle
         run: |
-          docker build . -t mtweb
-          docker run --rm mtweb ls -la /minetest-wasm/www
+          test -f www/index.html
+          test -f www/minetest/minetest.js
+          test -f www/minetest/minetest.wasm
+          test -f www/minetest/minetest.worker.js
+          find www -maxdepth 3 -type f | sort | head -200
+
+      - name: Upload VibeCoord import artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: minetest-wasm-www
+          path: www/
+          if-no-files-found: error
+          retention-days: 14

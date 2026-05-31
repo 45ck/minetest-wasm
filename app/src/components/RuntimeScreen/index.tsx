@@ -257,6 +257,17 @@ const RuntimeScreen: React.FC<RuntimeScreenProps> = ({ gameOptions, onGameStatus
         minetestArgs.name = gameOptions.playerName || 'Player' + Math.random().toString(36).substring(2, 7);
         minetestArgs.password = gameOptions.password || Math.random().toString(36).substring(2, 12);
       }
+      else if (gameOptions.mode === 'direct') {
+        if (!gameOptions.directAddress || !gameOptions.directPort) {
+          throw new Error('RuntimeScreen: direct preview address is required');
+        }
+        minetestArgs.go = true;
+        minetestArgs.gameid = gameOptions.gameId;
+        minetestArgs.address = gameOptions.directAddress;
+        minetestArgs.port = gameOptions.directPort;
+        minetestArgs.name = gameOptions.playerName || 'vc' + Math.random().toString(36).substring(2, 7);
+        minetestConsole.print(`Using direct preview server ${minetestArgs.address}:${minetestArgs.port}`);
+      }
       // else if (gameOptions.mode === 'host') {
       //   minetestArgs.go = true;
       //   minetestArgs.gameid = gameOptions.gameId;

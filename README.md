@@ -98,6 +98,22 @@ Inner page (in iframe):
 - Cross-Origin-Opener-Policy cross-origin
 - Cross-Origin-Resource-Policy cross-origin (only required on resource files)
 
+### VibeCoord embedded preview
+
+This fork accepts VibeCoord direct-preview query parameters so a generated
+Luanti game server can be opened inside the VibeCoord preview panel without
+using the public DustLabs VPN-code flow:
+
+```
+/?server=127.0.0.1:30000&proxy=wss%3A%2F%2Fapp.example.test%2Fapi%2Fpreview%2Fsessions%2F...%2Fluanti%2Fbrowser%2Fws&name=vc1234&gameid=minetest_game
+```
+
+When both `server` and `proxy` are present, the React loader auto-starts in
+`direct` mode, sets the Emscripten websocket proxy to the supplied VibeCoord
+bridge URL, and passes `--go --address <host> --port <port>` to Luanti.
+This branch is intended for VibeCoord builds copied into
+`packages/agent/assets/luanti-wasm-www/client`.
+
 
 ### Hosting for running standalone
 

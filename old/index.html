@@ -83,6 +83,117 @@
           tcon.remove();
       }
 
+      const pageParams = new URLSearchParams(window.location.search);
+
+      function defaultVibeCoordPlayerName() {
+          const fromQuery = pageParams.get('name');
+          if (fromQuery && /^[A-Za-z0-9_-]{1,20}$/.test(fromQuery)) return fromQuery;
+          return `vc${Math.floor(Math.random() * 9000) + 1000}`;
+      }
+
+      function vibeCoordPreviewTarget() {
+          const server = pageParams.get('server') || '';
+          const address = pageParams.get('address') || '';
+          const portParam = pageParams.get('port') || '';
+          if (server) {
+              const colon = server.lastIndexOf(':');
+              if (colon > 0) {
+                  const port = parseInt(server.slice(colon + 1), 10);
+                  if (Number.isFinite(port) && port > 0 && port <= 65535) {
+                      return { host: server.slice(0, colon), port };
+                  }
+              }
+          }
+          if (address && portParam) {
+              const port = parseInt(portParam, 10);
+              if (Number.isFinite(port) && port > 0 && port <= 65535) {
+                  return { host: address, port };
+              }
+          }
+          return null;
+      }
+
+      function vibeCoordBrowserBasePath() {
+          const match = window.location.pathname.match(/^(.*\/luanti\/browser)(?:\/client)?\/?/);
+          if (!match) throw new Error('vibecoord_luanti_browser_path_unresolved');
+          return match[1];
+      }
+
+      function vibeCoordWsUrlForToken(proxyPath, token) {
+          const url = new URL(proxyPath, window.location.origin);
+          url.protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          url.searchParams.set('token', token);
+          return url.toString();
+      }
+
+      async function mintVibeCoordBridgeToken(target) {
+          const response = await fetch(`${vibeCoordBrowserBasePath()}/connect`, {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+              body: JSON.stringify({ host: target.host, port: target.port }),
+          });
+          if (!response.ok) {
+              const body = await response.text();
+              throw new Error(body || `connect_failed_${response.status}`);
+          }
+          const payload = await response.json();
+          if (!payload || typeof payload.token !== 'string' || !payload.token) {
+              throw new Error('connect_missing_token');
+          }
+          return payload.token;
+      }
+
+      async function applyVibeCoordPreviewBridge(mtl, args) {
+          const target = vibeCoordPreviewTarget();
+          const proxyParam = pageParams.get('proxy') || pageParams.get('wss') || '';
+          if (target) {
+              args.address = target.host;
+              args.port = target.port;
+          }
+          if (!proxyParam) return;
+          if (target && (proxyParam.startsWith('/') || proxyParam.includes('/luanti/browser/ws'))) {
+              const token = await mintVibeCoordBridgeToken(target);
+              mtl.setProxy(vibeCoordWsUrlForToken(proxyParam, token));
+          } else {
+              mtl.setProxy(proxyParam);
+          }
+      }
+
+      function installVibeCoordAutoLaunch(mtl, args) {
+          const enabled = pageParams.get('vibecoord') === '1' || pageParams.has('autoload');
+          if (!enabled) return false;
+          window.__vibecoordLuantiInlineAutoload = true;
+          const priorReady = mtl.onready;
+          mtl.onready = async () => {
+              if (window.__vibecoordLuantiStarted) return;
+              window.__vibecoordLuantiStarted = true;
+              try {
+                  args.go = true;
+                  if (!args.gameid) args.gameid = 'minetest_game';
+                  if (!args.name) args.name = defaultVibeCoordPlayerName();
+                  if (!args.address) args.address = '127.0.0.1';
+                  if (!args.port) args.port = 30000;
+                  if (!args.extra.includes('--withserver')) args.extra.push('--withserver');
+                  await applyVibeCoordPreviewBridge(mtl, args);
+                  if (typeof enableMemorySaving === 'function') {
+                      enableMemorySaving(mtl);
+                  } else if (typeof mtl.setMinetestConf === 'function') {
+                      mtl.setMinetestConf(memorySavingConfig);
+                  }
+                  tcon_print("", "VibeCoord autoload: launching Luanti preview world.");
+                  wipePage();
+                  mtl.launch(args);
+              } catch (err) {
+                  window.__vibecoordLuantiStarted = false;
+                  const message = err instanceof Error ? err.message : String(err);
+                  tcon_print("", `VibeCoord autoload failed: ${message}`);
+                  if (priorReady) priorReady();
+              }
+          };
+          return true;
+      }
+
       function enableLaunchForm() {
           if (join_code) {
               joinForm.style.display = 'block';
@@ -247,6 +358,7 @@
           tcon_print("", err);
           tcon_print("", "***********************************************");
       };
+      installVibeCoordAutoLaunch(mtl, args);
     </script>
   </body>
 </html>

@@ -39,10 +39,31 @@ function resolveVibeCoordInitialOptions(): { autoStart: boolean; options: GameOp
   const params = new URLSearchParams(window.location.search);
   const server = params.get('server') || '';
   const proxy = params.get('proxy') || params.get('wss') || '';
+  const shouldAutoStartLocal =
+    params.get('vibecoord') === '1' || params.has('autoload') || params.has('go');
   const gameid = params.get('gameid') as GameId | null;
   const name = params.get('name') || undefined;
   const colon = server.lastIndexOf(':');
-  if (colon <= 0 || !proxy) return { autoStart: false, options };
+  const resolvedGameId = gameid === 'mineclonia' || gameid === 'mineclone2' || gameid === 'glitch' || gameid === 'blockbomber'
+    ? gameid
+    : 'minetest_game';
+  const resolvedPlayerName = name && /^[A-Za-z0-9_-]{1,20}$/.test(name)
+    ? name
+    : `vc${Math.floor(Math.random() * 9000) + 1000}`;
+  if (colon <= 0 || !proxy) {
+    if (!shouldAutoStartLocal) return { autoStart: false, options };
+    options.minetestArgs.go = true;
+    options.minetestArgs.gameid = resolvedGameId;
+    options.minetestArgs.name = resolvedPlayerName;
+    return {
+      autoStart: true,
+      options: {
+        ...options,
+        gameId: resolvedGameId,
+        playerName: resolvedPlayerName,
+      },
+    };
+  }
 
   const directAddress = server.slice(0, colon);
   const directPort = Number.parseInt(server.slice(colon + 1), 10);
@@ -56,10 +77,8 @@ function resolveVibeCoordInitialOptions(): { autoStart: boolean; options: GameOp
       ...options,
       proxy,
       mode: 'direct',
-      gameId: gameid === 'mineclonia' || gameid === 'mineclone2' || gameid === 'glitch' || gameid === 'blockbomber'
-        ? gameid
-        : 'minetest_game',
-      playerName: name && /^[A-Za-z0-9_-]{1,20}$/.test(name) ? name : `vc${Math.floor(Math.random() * 9000) + 1000}`,
+      gameId: resolvedGameId,
+      playerName: resolvedPlayerName,
       directAddress,
       directPort,
     },

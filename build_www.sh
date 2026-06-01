@@ -19,6 +19,7 @@ EMSCRIPTEN_FILES="minetest.js minetest.wasm minetest.worker.js" # Todo: Is this 
 for I in $EMSCRIPTEN_FILES; do
   cp -p "$I" "$RELEASE_DIR"
 done
+cp -p "$BASE_DIR/static/vibecoord-worker-main.js" "$RELEASE_DIR"
 
 # Copy assets
 cp -a "$BASE_DIR/static/assets/." "$ASSETS_DST_DIR"

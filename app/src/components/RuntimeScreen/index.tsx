@@ -283,6 +283,7 @@ const RuntimeScreen: React.FC<RuntimeScreenProps> = ({ gameOptions, onGameStatus
 
       // Set up minetest args
       const { minetestArgs } = gameOptions;
+      const shouldAutoGoLocal = gameOptions.mode === 'local' && minetestArgs.go;
       minetestArgs.clear();
 
       // NOTE: With --go the server seems to load too slowly for the client to connect,
@@ -308,6 +309,15 @@ const RuntimeScreen: React.FC<RuntimeScreenProps> = ({ gameOptions, onGameStatus
         minetestArgs.port = gameOptions.directPort;
         minetestArgs.name = gameOptions.playerName || 'vc' + Math.random().toString(36).substring(2, 7);
         minetestConsole.print(`Using direct preview server ${minetestArgs.address}:${minetestArgs.port}`);
+      }
+      else if (shouldAutoGoLocal) {
+        minetestArgs.go = true;
+        minetestArgs.gameid = gameOptions.gameId;
+        minetestArgs.address = '127.0.0.1';
+        minetestArgs.port = 30000;
+        minetestArgs.name = gameOptions.playerName || 'vc' + Math.random().toString(36).substring(2, 7);
+        if (!minetestArgs.extra.includes('--withserver')) minetestArgs.extra.push('--withserver');
+        minetestConsole.print(`Using local preview world ${minetestArgs.gameid} at ${minetestArgs.address}:${minetestArgs.port}`);
       }
       // else if (gameOptions.mode === 'host') {
       //   minetestArgs.go = true;
@@ -435,17 +445,7 @@ const RuntimeScreen: React.FC<RuntimeScreenProps> = ({ gameOptions, onGameStatus
       }
     };
 
-    // Add worker injection script for proper thread communication
-    const workerInject = `
-      Module['print'] = (text) => {
-        postMessage({cmd: 'callHandler', handler: 'print', args: [text], threadId: Module['_pthread_self']()});
-      };
-      Module['printErr'] = (text) => {
-        postMessage({cmd: 'callHandler', handler: 'printErr', args: [text], threadId: Module['_pthread_self']()});
-      };
-      importScripts('minetest.js');
-    `;
-    window.Module['mainScriptUrlOrBlob'] = new Blob([workerInject], { type: "text/javascript" });
+    window.Module['mainScriptUrlOrBlob'] = 'vibecoord-worker-main.js';
     window.Module['onFullScreen'] = () => { fixGeometry(); };
 
     // Function to load the script

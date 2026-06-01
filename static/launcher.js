@@ -217,7 +217,7 @@ class LaunchScheduler {
         this.conditions.forEach(v => {
             v[1].delete(name);
         });
-        window.requestAnimationFrame(this.invokeCallbacks.bind(this));
+        scheduleLauncherTick(this.invokeCallbacks.bind(this));
     }
 
     clearCondition(name, newCallback = null, deps = []) {
@@ -242,6 +242,14 @@ class LaunchScheduler {
     }
 }
 const mtScheduler = new LaunchScheduler();
+
+function scheduleLauncherTick(callback) {
+    if (typeof window.requestAnimationFrame == 'function') {
+        window.requestAnimationFrame(callback);
+        return;
+    }
+    window.setTimeout(callback, 0);
+}
 
 // --- START WasmFS Persistence Logic ---
 let idbManager = null; // Will be instance of IDBManager
@@ -392,7 +400,7 @@ function emloop_ready() {
 // Called when the wasm module wants to force redraw before next frame
 function emloop_request_animation_frame() {
     emloop_pause();
-    window.requestAnimationFrame(() => { emloop_unpause(); });
+    scheduleLauncherTick(() => { emloop_unpause(); });
 }
 
 function makeArgv(args) {
@@ -419,7 +427,7 @@ function consoleUpdate() {
         consoleOutput.scrollTop = consoleOutput.scrollHeight; // focus on bottom
         consoleDirty = false;
     }
-    window.requestAnimationFrame(consoleUpdate);
+    scheduleLauncherTick(consoleUpdate);
 }
 
 function consoleToggle() {
@@ -517,20 +525,14 @@ Module['printErr'] = Module['print'];
 
 // This is injected into workers so that out/err are sent to the main thread.
 // This probably should be the default behavior, but doesn't seem to be for WasmFS.
-const workerInject = `
-  Module['print'] = (text) => {
-    postMessage({cmd: 'callHandler', handler: 'print', args: [text], threadId: Module['_pthread_self']()});
-  };
-  Module['printErr'] = (text) => {
-    postMessage({cmd: 'callHandler', handler: 'printErr', args: [text], threadId: Module['_pthread_self']()});
-  };
-  importScripts('minetest.js');
-`;
-Module['mainScriptUrlOrBlob'] = new Blob([workerInject], { type: "text/javascript" });
+Module['mainScriptUrlOrBlob'] = 'vibecoord-worker-main.js';
 
 Module['onFullScreen'] = () => { fixGeometry(); };
-window.onerror = function(event) {
-    consolePrint('Exception thrown, see JavaScript console');
+window.onerror = function(message, source, lineno, colno, error) {
+    const location = source ? ` at ${source}:${lineno || 0}:${colno || 0}` : '';
+    const detail = error && error.stack ? error.stack : String(message || error || 'unknown error');
+    consolePrint(`Exception thrown${location}`);
+    consolePrint(detail);
 }
 
 function resizeCanvas(width, height) {
